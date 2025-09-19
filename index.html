@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Καιρός – Παλαιό Φάληρο</title>
+  <style>
+    :root {
+      --card-width: 420px;
+      --margin: 24px;
+    }
+    html, body {
+      height:100%; margin:0;
+      background: black; color:#fff;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .card {
+      position: fixed; z-index: 9999;
+      width: var(--card-width); box-sizing: border-box;
+      padding: 16px 18px; border-radius: 16px;
+      background: black;
+    }
+    .tl { top: var(--margin); left: var(--margin); }
+    .tr { top: var(--margin); right: var(--margin); }
+    .bl { bottom: var(--margin); left: var(--margin); }
+    .br { bottom: var(--margin); right: var(--margin); }
+
+    .city { font-size: 18px; font-weight:700; margin:0 0 6px; }
+    .row { display:flex; align-items:center; gap:12px; }
+    .icon { width:56px; height:56px; flex:0 0 56px; }
+    .temp { font-size: 46px; font-weight:800; line-height:1; margin:0; }
+    .desc { font-size: 14px; text-transform:capitalize; opacity:.9; margin:0; }
+    .meta { font-size: 12px; opacity:.9; margin-top:6px; line-height:1.4; }
+  </style>
+</head>
+<body>
+  <div id="card" class="card tr">
+    <div class="city">Παλαιό Φάληρο</div>
+    <div class="row">
+      <img id="icon" class="icon" alt="icon" src="" />
+      <div>
+        <div class="temp" id="temp">—°C</div>
+        <div class="desc" id="desc">—</div>
+      </div>
+    </div>
+    <div class="meta" id="meta">Άνεμος: — m/s • Υγρασία: —% • Αίσθηση: —°C</div>
+  </div>
+
+  <script>
+    /* === ΡΥΘΜΙΣΕΙΣ === */
+    const LAT = 37.928;
+    const LON = 23.701;
+    const API_KEY = "40a4c7520b708d56da15948f47d86533"; // <-- δικό σου API key
+
+    function applyQueryOptions(){
+      const params = new URLSearchParams(location.search);
+      const corner = (params.get("corner")||"tr").toLowerCase();
+      const width  = parseInt(params.get("width")||"420",10);
+      const margin = parseInt(params.get("margin")||"24",10);
+      const card = document.getElementById("card");
+
+      card.classList.remove("tl","tr","bl","br");
+      card.classList.add(["tl","tr","bl","br"].includes(corner)? corner : "tr");
+
+      document.documentElement.style.setProperty("--card-width", width+"px");
+      document.documentElement.style.setProperty("--margin", margin+"px");
+    }
+
+    async function loadWeather(){
+      try{
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${LAT}&lon=${LON}&units=metric&lang=el&appid=${API_KEY}`;
+        const wRes = await fetch(url).then(r=>r.json());
+        if(!wRes || !wRes.main) throw new Error("No weather");
+
+        const temp = Math.round(wRes.main.temp);
+        const feels = Math.round(wRes.main.feels_like);
+        const desc  = (wRes.weather?.[0]?.description) || "—";
+        const wind  = (wRes.wind?.speed!=null) ? wRes.wind.speed.toFixed(1) : "—";
+        const hum   = (wRes.main?.humidity!=null) ? wRes.main.humidity : "—";
+        const icon  = (wRes.weather?.[0]?.icon) || "01d";
+
+        document.getElementById("temp").textContent = `${temp}°C`;
+        document.getElementById("desc").textContent = desc;
+        document.getElementById("meta").textContent = `Άνεμος: ${wind} m/s • Υγρασία: ${hum}% • Αίσθηση: ${feels}°C`;
+        document.getElementById("icon").src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
+      } catch(e){
+        document.getElementById("desc").textContent = "Σφάλμα φόρτωσης";
+      }
+    }
+
+    applyQueryOptions();
+    loadWeather();
+  </script>
+</body>
+</html>
