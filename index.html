@@ -2,94 +2,106 @@
 <html lang="el">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Καιρός – Παλαιό Φάληρο</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Καιρός – Παλαιό Φάληρο (Portrait Full)</title>
   <style>
     :root {
-      --card-width: 420px;
-      --margin: 24px;
+      --s: 3;              /* scale (αλλάζει από URL ?scale=…) */
+      --pad: 8;            /* padding base (αλλάζει από URL ?pad=…) */
     }
-    html, body {
-      height:100%; margin:0;
-      background: black; color:#fff;
-      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    html, body { height:100%; margin:0; background:#000; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .wrap { height:100%; display:flex; align-items:center; justify-content:center; padding: calc(var(--pad)*1px); }
+    .panel {
+      width: 100%; height: 100%; box-sizing: border-box; background:#000; display:flex; flex-direction:column; justify-content:space-between;
     }
-    .card {
-      position: fixed; z-index: 9999;
-      width: var(--card-width); box-sizing: border-box;
-      padding: 16px 18px; border-radius: 16px;
-      background: black;
-    }
-    .tl { top: var(--margin); left: var(--margin); }
-    .tr { top: var(--margin); right: var(--margin); }
-    .bl { bottom: var(--margin); left: var(--margin); }
-    .br { bottom: var(--margin); right: var(--margin); }
 
-    .city { font-size: 18px; font-weight:700; margin:0 0 6px; }
-    .row { display:flex; align-items:center; gap:12px; }
-    .icon { width:56px; height:56px; flex:0 0 56px; }
-    .temp { font-size: 46px; font-weight:800; line-height:1; margin:0; }
-    .desc { font-size: 14px; text-transform:capitalize; opacity:.9; margin:0; }
-    .meta { font-size: 12px; opacity:.9; margin-top:6px; line-height:1.4; }
+    /* Τυπογραφία/μεγέθη κλιμακωμένα με var(--s) */
+    .city  { font-size: calc(14px * var(--s)); font-weight:800; text-align:center; letter-spacing:.3px; margin:0; }
+    .iconB { text-align:center; margin: calc(2px * var(--s)) 0; }
+    .icon  { width: calc(64px * var(--s)); height: calc(64px * var(--s)); image-rendering: -webkit-optimize-contrast; }
+
+    .temp  { font-size: calc(48px * var(--s)); font-weight:900; line-height:.9; text-align:center; margin:0; }
+    .desc  { font-size: calc(16px * var(--s)); text-transform:capitalize; opacity:.95; text-align:center; margin: calc(2px * var(--s)) 0 0; }
+
+    .grid  { display:grid; gap: calc(6px * var(--s)); margin-top: calc(6px * var(--s)); grid-template-columns: repeat(2, 1fr); }
+    .card  { background:#0a0a0a; border:1px solid #141414; border-radius: calc(6px * var(--s)); padding: calc(6px * var(--s)); }
+    .label { opacity:.75; font-size: calc(10px * var(--s)); }
+    .value { font-size: calc(14px * var(--s)); font-weight:700; margin-top: calc(1px * var(--s)); }
+
+    .footer { text-align:center; font-size: calc(10px * var(--s)); opacity:.55; margin-top: calc(4px * var(--s)); min-height: 1em; }
   </style>
 </head>
 <body>
-  <div id="card" class="card tr">
-    <div class="city">Παλαιό Φάληρο</div>
-    <div class="row">
-      <img id="icon" class="icon" alt="icon" src="" />
+  <div class="wrap">
+    <div class="panel">
       <div>
-        <div class="temp" id="temp">—°C</div>
+        <h1 class="city">Παλαιό Φάληρο</h1>
+        <div class="iconB"><img id="icon" class="icon" alt="icon" src="" /></div>
+        <h2 class="temp" id="temp">—°C</h2>
         <div class="desc" id="desc">—</div>
       </div>
+
+      <div class="grid">
+        <div class="card"><div class="label">Αίσθηση</div>     <div class="value" id="feels">—°C</div></div>
+        <div class="card"><div class="label">Υγρασία</div>     <div class="value" id="hum">—%</div></div>
+        <div class="card"><div class="label">Άνεμος</div>      <div class="value" id="wind">— m/s</div></div>
+        <div class="card"><div class="label">Ορατότητα</div>   <div class="value" id="vis">— km</div></div>
+      </div>
+
+      <div class="footer" id="status"></div>
     </div>
-    <div class="meta" id="meta">Άνεμος: — m/s • Υγρασία: —% • Αίσθηση: —°C</div>
   </div>
 
   <script>
-    /* === ΡΥΘΜΙΣΕΙΣ === */
-    const LAT = 37.928;
-    const LON = 23.701;
-    const API_KEY = "40a4c7520b708d56da15948f47d86533"; // <-- δικό σου API key
+    /* Συντεταγμένες Παλαιού Φαλήρου */
+    const LAT = 37.928, LON = 23.701;
+    /* Βάλε εδώ το OpenWeather API key σου */
+    const API_KEY = "YOUR_API_KEY_HERE";
+    /* Auto-refresh (λεπτά) */
+    const REFRESH_MIN = 10;
 
-    function applyQueryOptions(){
-      const params = new URLSearchParams(location.search);
-      const corner = (params.get("corner")||"tr").toLowerCase();
-      const width  = parseInt(params.get("width")||"420",10);
-      const margin = parseInt(params.get("margin")||"24",10);
-      const card = document.getElementById("card");
+    /* Εφαρμογή παραμέτρων URL: ?scale=3.5&pad=10 */
+    (function applyParams(){
+      const p = new URLSearchParams(location.search);
+      const s   = parseFloat(p.get("scale") || "3");
+      const pad = parseFloat(p.get("pad")   || "8");
+      if (s > 0)   document.documentElement.style.setProperty("--s", String(s));
+      if (pad >=0) document.documentElement.style.setProperty("--pad", String(pad));
+    })();
 
-      card.classList.remove("tl","tr","bl","br");
-      card.classList.add(["tl","tr","bl","br"].includes(corner)? corner : "tr");
-
-      document.documentElement.style.setProperty("--card-width", width+"px");
-      document.documentElement.style.setProperty("--margin", margin+"px");
-    }
+    function set(id, text){ const el=document.getElementById(id); if(el) el.textContent = text; }
 
     async function loadWeather(){
       try{
-        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${LAT}&lon=${LON}&units=metric&lang=el&appid=${API_KEY}`;
-        const wRes = await fetch(url).then(r=>r.json());
-        if(!wRes || !wRes.main) throw new Error("No weather");
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${LAT}&lon=${LON}&units=metric&lang=el&appid=${API_KEY}&_cb=${Date.now()}`;
+        const res = await fetch(url, {cache:"no-store"});
+        const data = await res.json();
+        if(!data || !data.main) throw new Error("no data");
 
-        const temp = Math.round(wRes.main.temp);
-        const feels = Math.round(wRes.main.feels_like);
-        const desc  = (wRes.weather?.[0]?.description) || "—";
-        const wind  = (wRes.wind?.speed!=null) ? wRes.wind.speed.toFixed(1) : "—";
-        const hum   = (wRes.main?.humidity!=null) ? wRes.main.humidity : "—";
-        const icon  = (wRes.weather?.[0]?.icon) || "01d";
+        const temp  = Math.round(data.main.temp);
+        const feels = Math.round(data.main.feels_like);
+        const desc  = (data.weather?.[0]?.description) || "—";
+        const wind  = (data.wind?.speed!=null) ? data.wind.speed.toFixed(1) : "—";
+        const hum   = (data.main?.humidity!=null) ? data.main.humidity : "—";
+        const visKm = (data.visibility!=null) ? (data.visibility/1000).toFixed(1) : "—";
+        const icon  = (data.weather?.[0]?.icon) || "01d";
 
-        document.getElementById("temp").textContent = `${temp}°C`;
-        document.getElementById("desc").textContent = desc;
-        document.getElementById("meta").textContent = `Άνεμος: ${wind} m/s • Υγρασία: ${hum}% • Αίσθηση: ${feels}°C`;
+        set("temp", `${temp}°C`);
+        set("desc", desc);
+        set("feels", `${feels}°C`);
+        set("hum", `${hum}%`);
+        set("wind", `${wind} m/s`);
+        set("vis",  `${visKm} km`);
         document.getElementById("icon").src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
+
+        set("status", ""); // καθαρό footer
       } catch(e){
-        document.getElementById("desc").textContent = "Σφάλμα φόρτωσης";
+        set("status", "Σφάλμα φόρτωσης δεδομένων");
       }
     }
 
-    applyQueryOptions();
     loadWeather();
+    setInterval(loadWeather, REFRESH_MIN * 60 * 1000); // auto-refresh κάθε 10’
   </script>
 </body>
 </html>
